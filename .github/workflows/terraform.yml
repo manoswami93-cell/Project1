@@ -3,20 +3,51 @@ name: Terraform Deploy
 on:
   push:
     branches:
-      - main
       - dev
       - staging
+      - main
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
+
+    env:
+      TF_WORKSPACE: ${{ github.ref_name }}
+
     steps:
+      # 1️⃣ Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # 2️⃣ Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+
+      # 3️⃣ Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
+
+      # 4️⃣ Initialize Terraform
+      - name: Terraform Init
+        run: terraform init
+
+      # 5️⃣ Select or create workspace
+      - name: Terraform Workspace
+        run: |
+          terraform workspace list | grep -q "^$TF_WORKSPACE$" || terraform workspace new $TF_WORKSPACE
+          terraform workspace select $TF_WORKSPACE
+
+      # 6️⃣ Terraform Plan
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+
+      # 7️⃣ Terraform Apply (only on main branch)
+      - name: Terraform Apply
+        if: github.ref_name == 'main'
+        run: terraform apply -auto-approve tfplan
